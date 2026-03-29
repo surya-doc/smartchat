@@ -6,7 +6,7 @@ spring:
     driver-class-name: com.mysql.cj.jdbc.Driver
   jpa:
     hibernate:
-      ddl-auto: create
+      ddl-auto: validate
     show-sql: true
   flyway:
     enabled: true
@@ -19,3 +19,8 @@ server:
 logging:
   level:
     org.flywaydb: DEBUG
+
+app:
+  jwt:
+    secret: smartchat-super-secret-key-for-jwt-signing-2024-make-it-long
+    expiration: 86400000
