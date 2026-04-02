@@ -1,9 +1,9 @@
 package com.smartchat.smartchat.controller.chat;
 
-
 import com.smartchat.smartchat.dto.chat.CreateRoomRequest;
 import com.smartchat.smartchat.dto.chat.MessageResponse;
 import com.smartchat.smartchat.dto.chat.RoomResponse;
+import com.smartchat.smartchat.entity.JoinRequest;
 import com.smartchat.smartchat.service.chat.MessageService;
 import com.smartchat.smartchat.service.chat.RoomService;
 import jakarta.validation.Valid;
@@ -23,12 +23,13 @@ public class RoomController {
     private final RoomService roomService;
     private final MessageService messageService;
 
+    // ─── existing ─────────────────────────────────────────────────────────────
+
     @PostMapping
     public ResponseEntity<RoomResponse> createRoom(
             @Valid @RequestBody CreateRoomRequest request,
             @AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(
-                roomService.createRoom(request, userDetails.getUsername()));
+        return ResponseEntity.ok(roomService.createRoom(request, userDetails.getUsername()));
     }
 
     @GetMapping
@@ -42,16 +43,57 @@ public class RoomController {
     }
 
     @PostMapping("/{roomId}/join")
-    public ResponseEntity<Void> joinRoom(
+    public ResponseEntity<String> joinRoom(
             @PathVariable Long roomId,
             @AuthenticationPrincipal UserDetails userDetails) {
-        roomService.joinRoom(roomId, userDetails.getUsername());
-        return ResponseEntity.ok().build();
+        return ResponseEntity.ok(roomService.joinRoom(roomId, userDetails.getUsername()));
     }
 
     @GetMapping("/{roomId}/messages")
-    public ResponseEntity<List<MessageResponse>> getMessages(
-            @PathVariable Long roomId) {
+    public ResponseEntity<List<MessageResponse>> getMessages(@PathVariable Long roomId) {
         return ResponseEntity.ok(messageService.getLast50Messages(roomId));
+    }
+
+    // ─── new: invite link ─────────────────────────────────────────────────────
+
+    @PostMapping("/{roomId}/invite")
+    public ResponseEntity<String> generateInvite(
+            @PathVariable Long roomId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(roomService.generateInviteLink(roomId, userDetails.getUsername()));
+    }
+
+    @GetMapping("/invite/{token}")
+    public ResponseEntity<RoomResponse> acceptInvite(
+            @PathVariable String token,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(roomService.acceptInvite(token, userDetails.getUsername()));
+    }
+
+    // ─── new: join requests (admin) ───────────────────────────────────────────
+
+    @GetMapping("/{roomId}/join-requests")
+    public ResponseEntity<List<JoinRequest>> getPendingRequests(
+            @PathVariable Long roomId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(roomService.getPendingRequests(roomId, userDetails.getUsername()));
+    }
+
+    @PostMapping("/{roomId}/join-requests/{requestId}/approve")
+    public ResponseEntity<Void> approveRequest(
+            @PathVariable Long roomId,
+            @PathVariable Long requestId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        roomService.approveJoinRequest(roomId, requestId, userDetails.getUsername());
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/{roomId}/join-requests/{requestId}/reject")
+    public ResponseEntity<Void> rejectRequest(
+            @PathVariable Long roomId,
+            @PathVariable Long requestId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        roomService.rejectJoinRequest(roomId, requestId, userDetails.getUsername());
+        return ResponseEntity.ok().build();
     }
 }

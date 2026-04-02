@@ -6,13 +6,13 @@ import org.hibernate.annotations.CreationTimestamp;
 import java.time.LocalDateTime;
 
 @Entity
-@Table(name = "room_members",
+@Table(name = "join_requests",
         uniqueConstraints = @UniqueConstraint(columnNames = {"room_id", "user_id"}))
 @Data
 @NoArgsConstructor
 @AllArgsConstructor
 @Builder
-public class RoomMember {
+public class JoinRequest {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
@@ -29,21 +29,18 @@ public class RoomMember {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
-    private MemberRole role = MemberRole.MEMBER;    // NEW
+    private JoinRequestStatus status = JoinRequestStatus.PENDING;
 
-    @Enumerated(EnumType.STRING)
-    @Column(nullable = false)
-    @Builder.Default
-    private MemberStatus status = MemberStatus.ACTIVE; // NEW
+    @ManyToOne(fetch = FetchType.LAZY)
+    @JoinColumn(name = "reviewed_by")
+    private User reviewedBy;               // which admin approved/rejected
+
+    private LocalDateTime reviewedAt;
 
     @CreationTimestamp
-    private LocalDateTime joinedAt;
+    private LocalDateTime requestedAt;
 
-    public enum MemberRole {
-        ADMIN, MEMBER                      // NEW
-    }
-
-    public enum MemberStatus {
-        ACTIVE, PENDING, BANNED            // NEW
+    public enum JoinRequestStatus {
+        PENDING, APPROVED, REJECTED
     }
 }

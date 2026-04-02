@@ -30,6 +30,13 @@ public class User {
     @Column(nullable = false)
     private UserTier tier = UserTier.FREE;
 
+    @Column(length = 500)
+    private String avatarUrl;              // NEW
+
+    @Column(nullable = false)
+    @Builder.Default
+    private Boolean isOnline = false;      // NEW
+
     @CreationTimestamp
     private LocalDateTime createdAt;
 
