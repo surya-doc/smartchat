@@ -14,6 +14,7 @@ import org.springframework.security.core.userdetails.UserDetails;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RestController
 @RequestMapping("/api/rooms")
@@ -95,5 +96,44 @@ public class RoomController {
             @AuthenticationPrincipal UserDetails userDetails) {
         roomService.rejectJoinRequest(roomId, requestId, userDetails.getUsername());
         return ResponseEntity.ok().build();
+    }
+
+    // ─── new: edit message ─────────────────────────────────────────────────────
+
+    @PutMapping("/messages/{messageId}")
+    public ResponseEntity<MessageResponse> editMessage(
+            @PathVariable Long messageId,
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(
+                messageService.editMessage(messageId, body.get("content"), userDetails.getUsername()));
+    }
+
+// ─── new: delete message ───────────────────────────────────────────────────
+
+    @DeleteMapping("/messages/{messageId}")
+    public ResponseEntity<MessageResponse> deleteMessage(
+            @PathVariable Long messageId,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(
+                messageService.deleteMessage(messageId, userDetails.getUsername()));
+    }
+
+// ─── new: toggle reaction ──────────────────────────────────────────────────
+
+    @PostMapping("/messages/{messageId}/react")
+    public ResponseEntity<Map<String, Long>> reactToMessage(
+            @PathVariable Long messageId,
+            @RequestBody Map<String, String> body,
+            @AuthenticationPrincipal UserDetails userDetails) {
+        return ResponseEntity.ok(
+                messageService.toggleReaction(messageId, body.get("emoji"), userDetails.getUsername()));
+    }
+
+    @GetMapping("/{roomId}/messages/search")
+    public ResponseEntity<List<MessageResponse>> searchMessages(
+            @PathVariable Long roomId,
+            @RequestParam String q) {
+        return ResponseEntity.ok(messageService.searchMessages(roomId, q));
     }
 }

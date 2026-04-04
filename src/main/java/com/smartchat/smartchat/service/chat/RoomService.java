@@ -25,6 +25,7 @@ public class RoomService {
     private final UserRepository userRepository;
     private final RoomInvitationRepository roomInvitationRepository;
     private final JoinRequestRepository joinRequestRepository;
+    private final NotificationService notificationService;
 
     public RoomResponse createRoom(CreateRoomRequest request, String email) {
         User user = userRepository.findByEmail(email)
@@ -90,6 +91,14 @@ public class RoomService {
             joinRequestRepository.save(joinRequest);
             return "Join request sent. Waiting for admin approval.";
         }
+        // notify all admins of the room
+        roomMemberRepository.findByRoomAndRole(room, RoomMember.MemberRole.ADMIN)
+                .forEach(adminMember -> notificationService.notify(
+                        adminMember.getUser(),
+                        Notification.NotificationType.JOIN_REQUEST,
+                        user.getUsername() + " wants to join \"" + room.getName() + "\"",
+                        room.getId()
+                ));
         return "Cannot join this room.";
     }
 
@@ -192,6 +201,13 @@ public class RoomService {
         request.setReviewedBy(admin);
         request.setReviewedAt(LocalDateTime.now());
         joinRequestRepository.save(request);
+
+        notificationService.notify(
+                request.getUser(),
+                Notification.NotificationType.JOIN_APPROVED,
+                "Your request to join \"" + room.getName() + "\" was approved!",
+                room.getId()
+        );
     }
 
     // ─── new: admin rejects join request ──────────────────────────────────────
@@ -208,6 +224,13 @@ public class RoomService {
         request.setReviewedBy(admin);
         request.setReviewedAt(LocalDateTime.now());
         joinRequestRepository.save(request);
+
+        notificationService.notify(
+                request.getUser(),
+                Notification.NotificationType.JOIN_REJECTED,
+                "Your request to join \"" + room.getName() + "\" was rejected.",
+                room.getId()
+        );
     }
 
     // ─── new: get pending join requests (admin only) ───────────────────────────

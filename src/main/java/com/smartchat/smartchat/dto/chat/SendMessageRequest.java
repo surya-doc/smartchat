@@ -12,4 +12,6 @@ public class SendMessageRequest {
 
     @NotBlank(message = "Message content is required")
     private String content;
+
+    private Long replyToId;   // optional — null if not a reply
 }
