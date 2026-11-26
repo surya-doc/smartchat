@@ -2,14 +2,15 @@ package com.smartchat.smartchat.dto.chat;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.Size;
-import lombok.Data;
 
-@Data
-public class CreateRoomRequest {
+public record CreateRoomRequest(
+        @NotBlank(message = "Room name is required")
+        @Size(min = 3, max = 100, message = "Room name must be between 3 and 100 characters")
+        String name,
 
-    @NotBlank(message = "Room name is required")
-    @Size(min = 3, max = 100, message = "Room name must be between 3 and 100 characters")
-    private String name;
+        @Size(max = 500, message = "Description must be at most 500 characters")
+        String description,
 
-    private boolean isPrivate = false;
+        boolean isPrivate
+) {
 }

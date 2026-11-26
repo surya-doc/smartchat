@@ -3,11 +3,18 @@ package com.smartchat.smartchat.controller.chat;
 import com.smartchat.smartchat.dto.chat.DirectMessageRequest;
 import com.smartchat.smartchat.dto.chat.DirectMessageResponse;
 import com.smartchat.smartchat.service.chat.DirectMessageService;
+import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.core.annotation.AuthenticationPrincipal;
 import org.springframework.security.core.userdetails.UserDetails;
-import org.springframework.web.bind.annotation.*;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
+import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.ResponseStatus;
+import org.springframework.web.bind.annotation.RestController;
 
 import java.util.List;
 
@@ -19,26 +26,21 @@ public class DirectMessageController {
     private final DirectMessageService directMessageService;
 
     @PostMapping
-    public ResponseEntity<DirectMessageResponse> sendMessage(
-            @RequestBody DirectMessageRequest request,
-            @AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(
-                directMessageService.sendMessage(request, userDetails.getUsername()));
+    @ResponseStatus(HttpStatus.CREATED)
+    public DirectMessageResponse sendMessage(@Valid @RequestBody DirectMessageRequest request,
+                                             @AuthenticationPrincipal UserDetails user) {
+        return directMessageService.sendMessage(request, user.getUsername());
     }
 
     @GetMapping("/{userId}")
-    public ResponseEntity<List<DirectMessageResponse>> getConversation(
-            @PathVariable Long userId,
-            @AuthenticationPrincipal UserDetails userDetails) {
-        return ResponseEntity.ok(
-                directMessageService.getConversation(userId, userDetails.getUsername()));
+    public List<DirectMessageResponse> getConversation(@PathVariable Long userId,
+                                                       @AuthenticationPrincipal UserDetails user) {
+        return directMessageService.getConversation(userId, user.getUsername());
     }
 
     @PostMapping("/{userId}/read")
-    public ResponseEntity<Void> markAsRead(
-            @PathVariable Long userId,
-            @AuthenticationPrincipal UserDetails userDetails) {
-        directMessageService.markAsRead(userId, userDetails.getUsername());
-        return ResponseEntity.ok().build();
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void markAsRead(@PathVariable Long userId, @AuthenticationPrincipal UserDetails user) {
+        directMessageService.markAsRead(userId, user.getUsername());
     }
 }

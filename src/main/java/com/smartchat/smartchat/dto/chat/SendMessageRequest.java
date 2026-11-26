@@ -2,16 +2,16 @@ package com.smartchat.smartchat.dto.chat;
 
 import jakarta.validation.constraints.NotBlank;
 import jakarta.validation.constraints.NotNull;
-import lombok.Data;
+import jakarta.validation.constraints.Size;
 
-@Data
-public class SendMessageRequest {
+public record SendMessageRequest(
+        @NotNull(message = "Room ID is required")
+        Long roomId,
 
-    @NotNull(message = "Room ID is required")
-    private Long roomId;
+        @NotBlank(message = "Message content is required")
+        @Size(max = MessageLimits.MAX_CONTENT_LENGTH, message = "Message is too long")
+        String content,
 
-    @NotBlank(message = "Message content is required")
-    private String content;
-
-    private Long replyToId;   // optional — null if not a reply
+        Long replyToId   // optional: id of the message being replied to
+) {
 }

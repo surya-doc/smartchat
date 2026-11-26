@@ -1,9 +1,9 @@
 package com.smartchat.smartchat.dto.chat;
 
-import lombok.Data;
+import jakarta.validation.constraints.NotNull;
 
-@Data
-public class TypingRequest {
-    private Long roomId;
-    private Boolean isTyping;
+public record TypingRequest(
+        @NotNull Long roomId,
+        boolean typing
+) {
 }

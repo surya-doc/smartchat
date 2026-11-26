@@ -2,157 +2,194 @@ package com.smartchat.smartchat.service.chat;
 
 import com.smartchat.smartchat.dto.chat.MessageResponse;
 import com.smartchat.smartchat.dto.chat.SendMessageRequest;
-import com.smartchat.smartchat.entity.*;
-import com.smartchat.smartchat.repository.*;
+import com.smartchat.smartchat.entity.Message;
+import com.smartchat.smartchat.entity.MessageReaction;
+import com.smartchat.smartchat.entity.Room;
+import com.smartchat.smartchat.entity.User;
+import com.smartchat.smartchat.event.RoomMessageEvent;
+import com.smartchat.smartchat.exception.BadRequestException;
+import com.smartchat.smartchat.exception.ForbiddenException;
+import com.smartchat.smartchat.exception.ResourceNotFoundException;
+import com.smartchat.smartchat.repository.MessageReactionRepository;
+import com.smartchat.smartchat.repository.MessageReactionRepository.ReactionCount;
+import com.smartchat.smartchat.repository.MessageRepository;
+import com.smartchat.smartchat.repository.RoomRepository;
+import com.smartchat.smartchat.service.UserService;
 import lombok.RequiredArgsConstructor;
+import org.springframework.context.ApplicationEventPublisher;
+import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.HashMap;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.stream.Collectors;
 
+/**
+ * Room messages. Every change (new, edited, deleted, reacted) is broadcast to the room
+ * as the full {@link MessageResponse}; clients replace the message with the same id.
+ */
 @Service
 @RequiredArgsConstructor
 @Transactional
 public class MessageService {
 
+    private static final int SEARCH_LIMIT = 50;
+    private static final String DELETED_PLACEHOLDER = "This message was deleted.";
+
     private final MessageRepository messageRepository;
-    private final RoomRepository roomRepository;
-    private final UserRepository userRepository;
     private final MessageReactionRepository messageReactionRepository;
+    private final RoomRepository roomRepository;
+    private final UserService userService;
+    private final RoomAccessService roomAccessService;
+    private final ApplicationEventPublisher eventPublisher;
 
-    // ─── existing: save message (updated to support reply) ────────────────────
+    public MessageResponse sendMessage(SendMessageRequest request, String email) {
+        if (request.roomId() == null) {
+            throw new BadRequestException("Room ID is required.");
+        }
+        roomAccessService.requireActiveMember(request.roomId(), email);
+        String content = ContentRules.requireContent(request.content());
 
-    public MessageResponse saveMessage(Long roomId, String email, String content) {
-        return saveMessageInternal(roomId, email, content, null);
-    }
-
-    public MessageResponse saveMessageWithReply(SendMessageRequest request, String email) {
-        return saveMessageInternal(request.getRoomId(), email, request.getContent(), request.getReplyToId());
-    }
-
-    private MessageResponse saveMessageInternal(Long roomId, String email, String content, Long replyToId) {
-        User user = getUser(email);
-        Room room = getRoom(roomId);
+        User sender = userService.getByEmail(email);
+        Room room = roomRepository.getReferenceById(request.roomId()); // membership check proved it exists
 
         Message.MessageBuilder builder = Message.builder()
                 .content(content)
                 .room(room)
-                .sender(user)
+                .sender(sender)
                 .senderType(Message.SenderType.USER);
 
-        if (replyToId != null) {
-            Message replyTo = messageRepository.findById(replyToId)
-                    .orElseThrow(() -> new RuntimeException("Replied message not found"));
+        if (request.replyToId() != null) {
+            Message replyTo = getMessageEntity(request.replyToId());
+            // Without this check a member of room A could quote (and so read) a message from room B.
+            if (!replyTo.getRoom().getId().equals(request.roomId())) {
+                throw new BadRequestException("You can only reply to messages in the same room.");
+            }
             builder.replyTo(replyTo);
         }
 
-        return toResponse(messageRepository.save(builder.build()));
+        Message saved = messageRepository.save(builder.build());
+        MessageResponse response = toResponse(saved, Map.of()); // a new message has no reactions yet
+        eventPublisher.publishEvent(new RoomMessageEvent(request.roomId(), response));
+        return response;
     }
-
-    // ─── existing: get last 50 messages ───────────────────────────────────────
 
     @Transactional(readOnly = true)
-    public List<MessageResponse> getLast50Messages(Long roomId) {
-        Room room = getRoom(roomId);
-        return messageRepository.findTop50ByRoomOrderBySentAtDesc(room)
-                .stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
+    public List<MessageResponse> getRecentMessages(Long roomId, String email) {
+        roomAccessService.requireActiveMember(roomId, email);
+        return toResponses(messageRepository.findTop50ByRoom_IdOrderBySentAtDescIdDesc(roomId));
     }
 
-    // ─── new: edit message ─────────────────────────────────────────────────────
+    @Transactional(readOnly = true)
+    public List<MessageResponse> searchMessages(Long roomId, String keyword, String email) {
+        roomAccessService.requireActiveMember(roomId, email);
+
+        String term = keyword == null ? "" : keyword.trim();
+        if (term.length() < 2) {
+            throw new BadRequestException("Search term must be at least 2 characters.");
+        }
+        return toResponses(messageRepository.searchInRoom(roomId, escapeLike(term), PageRequest.of(0, SEARCH_LIMIT)));
+    }
 
     public MessageResponse editMessage(Long messageId, String newContent, String email) {
-        User user = getUser(email);
-        Message message = getMessage(messageId);
+        Message message = getMessageEntity(messageId);
+        User user = userService.getByEmail(email);
 
         if (!message.getSender().getId().equals(user.getId())) {
-            throw new RuntimeException("You can only edit your own messages.");
+            throw new ForbiddenException("You can only edit your own messages.");
         }
         if (message.getIsDeleted()) {
-            throw new RuntimeException("Cannot edit a deleted message.");
+            throw new BadRequestException("Deleted messages can't be edited.");
         }
 
-        message.setContent(newContent);
+        message.setContent(ContentRules.requireContent(newContent));
         message.setIsEdited(true);
-        return toResponse(messageRepository.save(message));
+        return publishChange(message);
     }
 
-    // ─── new: delete message ───────────────────────────────────────────────────
-
+    /** The sender can delete their own message; a room admin can delete any message (moderation). */
     public MessageResponse deleteMessage(Long messageId, String email) {
-        User user = getUser(email);
-        Message message = getMessage(messageId);
+        Message message = getMessageEntity(messageId);
+        User user = userService.getByEmail(email);
 
-        if (!message.getSender().getId().equals(user.getId())) {
-            throw new RuntimeException("You can only delete your own messages.");
+        boolean isSender = message.getSender().getId().equals(user.getId());
+        if (!isSender && !roomAccessService.isAdmin(message.getRoom().getId(), email)) {
+            throw new ForbiddenException("You can only delete your own messages.");
+        }
+        if (message.getIsDeleted()) {
+            return toResponse(message); // deleting twice is a no-op
         }
 
         message.setIsDeleted(true);
-        message.setContent("This message was deleted.");
-        return toResponse(messageRepository.save(message));
+        message.setContent(DELETED_PLACEHOLDER);
+        return publishChange(message);
     }
 
-    // ─── new: toggle reaction ──────────────────────────────────────────────────
+    /** Same user + same emoji again removes the reaction (toggle). */
+    public MessageResponse toggleReaction(Long messageId, String emoji, String email) {
+        Message message = getMessageEntity(messageId);
+        roomAccessService.requireActiveMember(message.getRoom().getId(), email);
 
-    public Map<String, Long> toggleReaction(Long messageId, String emoji, String email) {
-        User user = getUser(email);
-        Message message = getMessage(messageId);
+        if (message.getIsDeleted()) {
+            throw new BadRequestException("You can't react to a deleted message.");
+        }
+        String value = ContentRules.requireEmoji(emoji);
+        User user = userService.getByEmail(email);
 
-        // if same user reacts with same emoji → remove it (toggle off)
-        messageReactionRepository.findByMessageAndUserAndEmoji(message, user, emoji)
+        messageReactionRepository.findByMessageAndUserAndEmoji(message, user, value)
                 .ifPresentOrElse(
-                        existing -> messageReactionRepository.delete(existing),
-                        () -> messageReactionRepository.save(
-                                MessageReaction.builder()
-                                        .message(message)
-                                        .user(user)
-                                        .emoji(emoji)
-                                        .build()
-                        )
-                );
+                        messageReactionRepository::delete,
+                        () -> messageReactionRepository.save(MessageReaction.builder()
+                                .message(message)
+                                .user(user)
+                                .emoji(value)
+                                .build()));
+        messageReactionRepository.flush(); // make the change visible to the count query below
 
-        return getReactions(message);
-    }
-
-    // ─── new: get reactions ────────────────────────────────────────────────────
-
-    @Transactional(readOnly = true)
-    public Map<String, Long> getReactions(Long messageId) {
-        return getReactions(getMessage(messageId));
-    }
-
-    private Map<String, Long> getReactions(Message message) {
-        return messageReactionRepository.findByMessage(message)
-                .stream()
-                .collect(Collectors.groupingBy(
-                        MessageReaction::getEmoji,
-                        Collectors.counting()
-                ));
+        return publishChange(message);
     }
 
     // ─── helpers ──────────────────────────────────────────────────────────────
 
-    private User getUser(String email) {
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+    private MessageResponse publishChange(Message message) {
+        MessageResponse response = toResponse(message);
+        eventPublisher.publishEvent(new RoomMessageEvent(message.getRoom().getId(), response));
+        return response;
     }
 
-    private Room getRoom(Long roomId) {
-        return roomRepository.findById(roomId)
-                .orElseThrow(() -> new RuntimeException("Room not found"));
-    }
-
-    private Message getMessage(Long messageId) {
+    private Message getMessageEntity(Long messageId) {
         return messageRepository.findById(messageId)
-                .orElseThrow(() -> new RuntimeException("Message not found"));
+                .orElseThrow(() -> new ResourceNotFoundException("Message not found"));
     }
 
-    public MessageResponse toResponse(Message message) {
-        Map<String, Long> reactions = getReactions(message);
+    /** Maps a page of messages with one extra query for all their reactions (not one per message). */
+    private List<MessageResponse> toResponses(List<Message> messages) {
+        Map<Long, Map<String, Long>> reactions = reactionsFor(messages.stream().map(Message::getId).toList());
+        return messages.stream()
+                .map(message -> toResponse(message, reactions.getOrDefault(message.getId(), Map.of())))
+                .toList();
+    }
 
+    private MessageResponse toResponse(Message message) {
+        Map<String, Long> reactions = reactionsFor(List.of(message.getId())).getOrDefault(message.getId(), Map.of());
+        return toResponse(message, reactions);
+    }
+
+    private Map<Long, Map<String, Long>> reactionsFor(List<Long> messageIds) {
+        if (messageIds.isEmpty()) {
+            return Map.of();
+        }
+        Map<Long, Map<String, Long>> result = new HashMap<>();
+        for (ReactionCount count : messageReactionRepository.countByMessageIds(messageIds)) {
+            result.computeIfAbsent(count.getMessageId(), id -> new LinkedHashMap<>())
+                    .put(count.getEmoji(), count.getTotal());
+        }
+        return result;
+    }
+
+    private MessageResponse toResponse(Message message, Map<String, Long> reactions) {
         MessageResponse.MessageResponseBuilder builder = MessageResponse.builder()
                 .id(message.getId())
                 .content(message.getContent())
@@ -164,21 +201,17 @@ public class MessageService {
                 .isDeleted(message.getIsDeleted())
                 .reactions(reactions);
 
-        if (message.getReplyTo() != null) {
-            builder.replyToId(message.getReplyTo().getId())
-                    .replyToContent(message.getReplyTo().getContent())
-                    .replyToSenderUsername(message.getReplyTo().getSender().getUsername());
+        Message replyTo = message.getReplyTo();
+        if (replyTo != null) {
+            builder.replyToId(replyTo.getId())
+                    .replyToContent(replyTo.getContent())
+                    .replyToSenderUsername(replyTo.getSender().getUsername());
         }
-
         return builder.build();
     }
 
-    @Transactional(readOnly = true)
-    public List<MessageResponse> searchMessages(Long roomId, String keyword) {
-        Room room = getRoom(roomId);
-        return messageRepository.searchMessages(roomId, keyword)
-                .stream()
-                .map(this::toResponse)
-                .collect(Collectors.toList());
+    /** Escapes LIKE wildcards so searching for "50%" matches the text "50%", not everything. */
+    static String escapeLike(String term) {
+        return term.replace("!", "!!").replace("%", "!%").replace("_", "!_");
     }
 }
