@@ -1,0 +1,47 @@
+# Shared configuration. Every environment-specific value comes from an
+# environment variable, so this file is safe to commit.
+#   - Local development: the "dev" profile (application-dev.yml) is active by default.
+#   - Production: set SPRING_PROFILES_ACTIVE=prod and provide the variables below.
+
+spring:
+  application:
+    name: smartchat
+  profiles:
+    default: dev
+
+  datasource:
+    url: ${DB_URL}
+    username: ${DB_USERNAME}
+    password: ${DB_PASSWORD}
+    hikari:
+      maximum-pool-size: ${DB_POOL_SIZE:10}
+
+  jpa:
+    open-in-view: false            # no lazy loading outside transactions; services return DTOs
+    hibernate:
+      ddl-auto: validate           # Flyway owns the schema; Hibernate only checks it matches the entities
+    properties:
+      hibernate:
+        jdbc:
+          time_zone: UTC
+
+  flyway:
+    enabled: true
+    locations: classpath:db/migration
+
+server:
+  error:
+    include-message: never
+    include-stacktrace: never
+
+app:
+  jwt:
+    secret: ${JWT_SECRET}                        # at least 32 bytes (HS256)
+    expiration-ms: ${JWT_EXPIRATION_MS:86400000} # 24 hours
+  frontend-url: ${FRONTEND_URL}                  # used to build invite links
+  cors-allowed-origins: ${CORS_ALLOWED_ORIGINS}  # comma-separated list
+  default-room-id: 1                             # every new user joins #general (seeded in V1)
+
+logging:
+  level:
+    com.smartchat: INFO

@@ -28,14 +28,15 @@ public class User {
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
+    @Builder.Default
     private UserTier tier = UserTier.FREE;
 
     @Column(length = 500)
-    private String avatarUrl;              // NEW
+    private String avatarUrl;
 
     @Column(nullable = false)
     @Builder.Default
-    private Boolean isOnline = false;      // NEW
+    private Boolean isOnline = false;
 
     @CreationTimestamp
     private LocalDateTime createdAt;
