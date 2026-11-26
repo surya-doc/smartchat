@@ -30,19 +30,20 @@ public class Message {
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "reply_to_id")
-    private Message replyTo;               // NEW — self-referencing FK
+    private Message replyTo;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
+    @Builder.Default
     private SenderType senderType = SenderType.USER;
 
     @Column(nullable = false)
     @Builder.Default
-    private Boolean isEdited = false;      // NEW
+    private Boolean isEdited = false;
 
     @Column(nullable = false)
     @Builder.Default
-    private Boolean isDeleted = false;     // NEW
+    private Boolean isDeleted = false;
 
     @CreationTimestamp
     private LocalDateTime sentAt;
