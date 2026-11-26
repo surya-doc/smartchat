@@ -10,9 +10,9 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 public class RoomResponse {
-
     private Long id;
     private String name;
+    private String description;
     private String type;
     private String createdBy;
 }

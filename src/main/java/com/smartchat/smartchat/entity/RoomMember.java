@@ -29,21 +29,21 @@ public class RoomMember {
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
-    private MemberRole role = MemberRole.MEMBER;    // NEW
+    private MemberRole role = MemberRole.MEMBER;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
-    private MemberStatus status = MemberStatus.ACTIVE; // NEW
+    private MemberStatus status = MemberStatus.ACTIVE;
 
     @CreationTimestamp
     private LocalDateTime joinedAt;
 
     public enum MemberRole {
-        ADMIN, MEMBER                      // NEW
+        ADMIN, MEMBER
     }
 
     public enum MemberStatus {
-        ACTIVE, PENDING, BANNED            // NEW
+        ACTIVE, PENDING, BANNED
     }
 }

@@ -1,0 +1,9 @@
+# Test profile. The database comes from Testcontainers (@ServiceConnection),
+# so only application settings are needed here.
+
+app:
+  jwt:
+    secret: test-only-secret-that-is-long-enough-for-hs256
+    expiration-ms: 3600000
+  frontend-url: http://localhost:4200
+  cors-allowed-origins: http://localhost:4200

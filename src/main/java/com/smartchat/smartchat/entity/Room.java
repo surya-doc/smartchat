@@ -21,16 +21,17 @@ public class Room {
     private String name;
 
     @Column(length = 500)
-    private String description;            // NEW
+    private String description;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
+    @Builder.Default
     private RoomType type = RoomType.PUBLIC;
 
     @Enumerated(EnumType.STRING)
     @Column(nullable = false)
     @Builder.Default
-    private RoomStatus status = RoomStatus.ACTIVE;  // NEW
+    private RoomStatus status = RoomStatus.ACTIVE;
 
     @ManyToOne(fetch = FetchType.LAZY)
     @JoinColumn(name = "created_by", nullable = false)
@@ -40,10 +41,10 @@ public class Room {
     private LocalDateTime createdAt;
 
     public enum RoomType {
-        PUBLIC, PRIVATE, DIRECT            // DIRECT added
+        PUBLIC, PRIVATE, DIRECT
     }
 
     public enum RoomStatus {
-        ACTIVE, ARCHIVED                   // NEW
+        ACTIVE, ARCHIVED
     }
 }
