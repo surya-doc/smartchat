@@ -1,59 +1,60 @@
 package com.smartchat.smartchat.security;
 
-import io.jsonwebtoken.*;
+import com.smartchat.smartchat.config.AppProperties;
+import io.jsonwebtoken.JwtException;
+import io.jsonwebtoken.Jwts;
 import io.jsonwebtoken.security.Keys;
-import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 
 import javax.crypto.SecretKey;
+import java.nio.charset.StandardCharsets;
 import java.util.Date;
+import java.util.Optional;
 
+/**
+ * Issues and verifies HS256-signed JWTs. The subject is the user's email,
+ * which is also the Spring Security principal name everywhere in the app.
+ */
 @Component
 public class JwtTokenProvider {
 
-    @Value("${app.jwt.secret}")
-    private String jwtSecret;
+    private static final int MIN_SECRET_BYTES = 32; // HS256 needs a 256-bit key
 
-    @Value("${app.jwt.expiration}")
-    private long jwtExpiration;
+    private final SecretKey signingKey;
+    private final long expirationMs;
 
-    private SecretKey getSigningKey() {
-        return Keys.hmacShaKeyFor(jwtSecret.getBytes());
+    public JwtTokenProvider(AppProperties properties) {
+        String secret = properties.jwt().secret();
+        if (secret == null || secret.getBytes(StandardCharsets.UTF_8).length < MIN_SECRET_BYTES) {
+            throw new IllegalStateException(
+                    "app.jwt.secret must be at least " + MIN_SECRET_BYTES + " bytes long");
+        }
+        this.signingKey = Keys.hmacShaKeyFor(secret.getBytes(StandardCharsets.UTF_8));
+        this.expirationMs = properties.jwt().expirationMs();
     }
 
-    // Generate token from email
     public String generateToken(String email) {
         Date now = new Date();
-        Date expiryDate = new Date(now.getTime() + jwtExpiration);
-
         return Jwts.builder()
                 .subject(email)
                 .issuedAt(now)
-                .expiration(expiryDate)
-                .signWith(getSigningKey())
+                .expiration(new Date(now.getTime() + expirationMs))
+                .signWith(signingKey)
                 .compact();
     }
 
-    // Get email from token
-    public String getEmailFromToken(String token) {
-        return Jwts.parser()
-                .verifyWith(getSigningKey())
-                .build()
-                .parseSignedClaims(token)
-                .getPayload()
-                .getSubject();
-    }
-
-    // Validate token
-    public boolean validateToken(String token) {
+    /** Returns the email inside a valid token, or empty if the token is invalid or expired. */
+    public Optional<String> extractEmail(String token) {
         try {
-            Jwts.parser()
-                    .verifyWith(getSigningKey())
+            String subject = Jwts.parser()
+                    .verifyWith(signingKey)
                     .build()
-                    .parseSignedClaims(token);
-            return true;
+                    .parseSignedClaims(token)
+                    .getPayload()
+                    .getSubject();
+            return Optional.ofNullable(subject);
         } catch (JwtException | IllegalArgumentException e) {
-            return false;
+            return Optional.empty();
         }
     }
 }
