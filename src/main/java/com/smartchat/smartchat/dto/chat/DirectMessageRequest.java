@@ -1,9 +1,15 @@
 package com.smartchat.smartchat.dto.chat;
 
-import lombok.Data;
+import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
+import jakarta.validation.constraints.Size;
 
-@Data
-public class DirectMessageRequest {
-    private Long receiverId;
-    private String content;
+public record DirectMessageRequest(
+        @NotNull(message = "Receiver ID is required")
+        Long receiverId,
+
+        @NotBlank(message = "Message content is required")
+        @Size(max = MessageLimits.MAX_CONTENT_LENGTH, message = "Message is too long")
+        String content
+) {
 }

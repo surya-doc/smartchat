@@ -13,7 +13,9 @@ import java.time.LocalDateTime;
 @AllArgsConstructor
 public class DirectMessageResponse {
     private Long id;
+    private Long senderId;
     private String senderUsername;
+    private Long receiverId;
     private String receiverUsername;
     private String content;
     private Boolean isRead;

@@ -3,15 +3,17 @@ package com.smartchat.smartchat.service.chat;
 import com.smartchat.smartchat.dto.chat.NotificationResponse;
 import com.smartchat.smartchat.entity.Notification;
 import com.smartchat.smartchat.entity.User;
+import com.smartchat.smartchat.event.UserQueueEvent;
+import com.smartchat.smartchat.exception.ResourceNotFoundException;
 import com.smartchat.smartchat.repository.NotificationRepository;
-import com.smartchat.smartchat.repository.UserRepository;
+import com.smartchat.smartchat.service.UserService;
+import com.smartchat.smartchat.websocket.WebSocketPublisher;
 import lombok.RequiredArgsConstructor;
-import org.springframework.messaging.simp.SimpMessagingTemplate;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.List;
-import java.util.stream.Collectors;
 
 @Service
 @RequiredArgsConstructor
@@ -19,87 +21,51 @@ import java.util.stream.Collectors;
 public class NotificationService {
 
     private final NotificationRepository notificationRepository;
-    private final UserRepository userRepository;
-    private final SimpMessagingTemplate messagingTemplate;
+    private final UserService userService;
+    private final ApplicationEventPublisher eventPublisher;
 
-    // ─── create and push notification in real time ─────────────────────────────
-
-    public void notify(User recipient, Notification.NotificationType type,
-                       String message, Long referenceId) {
-
-        Notification notification = Notification.builder()
+    /** Stores the notification and pushes it to the user's open sessions after the transaction commits. */
+    public void notify(User recipient, Notification.NotificationType type, String message, Long referenceId) {
+        Notification saved = notificationRepository.save(Notification.builder()
                 .user(recipient)
                 .type(type)
                 .message(message)
                 .referenceId(referenceId)
-                .build();
+                .build());
 
-        Notification saved = notificationRepository.save(notification);
-
-        // push to user in real time via WebSocket
-        messagingTemplate.convertAndSendToUser(
-                recipient.getUsername(),
-                "/queue/notifications",
-                toResponse(saved)
-        );
+        eventPublisher.publishEvent(new UserQueueEvent(
+                recipient.getEmail(), WebSocketPublisher.QUEUE_NOTIFICATIONS, toResponse(saved)));
     }
-
-    // ─── get unread notifications ──────────────────────────────────────────────
 
     @Transactional(readOnly = true)
     public List<NotificationResponse> getUnread(String email) {
-        User user = getUser(email);
-        return notificationRepository
-                .findByUserAndIsReadFalseOrderByCreatedAtDesc(user)
+        User user = userService.getByEmail(email);
+        return notificationRepository.findByUserAndIsReadFalseOrderByCreatedAtDesc(user)
                 .stream()
                 .map(this::toResponse)
-                .collect(Collectors.toList());
+                .toList();
     }
-
-    // ─── get all notifications ─────────────────────────────────────────────────
 
     @Transactional(readOnly = true)
-    public List<NotificationResponse> getAll(String email) {
-        User user = getUser(email);
-        return notificationRepository
-                .findByUserOrderByCreatedAtDesc(user)
+    public List<NotificationResponse> getRecent(String email) {
+        User user = userService.getByEmail(email);
+        return notificationRepository.findTop100ByUserOrderByCreatedAtDesc(user)
                 .stream()
                 .map(this::toResponse)
-                .collect(Collectors.toList());
+                .toList();
     }
-
-    // ─── mark single notification as read ─────────────────────────────────────
 
     public void markAsRead(Long notificationId, String email) {
-        User user = getUser(email);
+        User user = userService.getByEmail(email);
+        // Someone else's notification answers 404 too, so ids can't be probed.
         Notification notification = notificationRepository.findById(notificationId)
-                .orElseThrow(() -> new RuntimeException("Notification not found"));
-
-        if (!notification.getUser().getId().equals(user.getId())) {
-            throw new RuntimeException("This notification does not belong to you.");
-        }
-
+                .filter(n -> n.getUser().getId().equals(user.getId()))
+                .orElseThrow(() -> new ResourceNotFoundException("Notification not found"));
         notification.setIsRead(true);
-        notificationRepository.save(notification);
     }
-
-    // ─── mark all as read ──────────────────────────────────────────────────────
 
     public void markAllAsRead(String email) {
-        User user = getUser(email);
-        notificationRepository
-                .findByUserAndIsReadFalseOrderByCreatedAtDesc(user)
-                .forEach(n -> {
-                    n.setIsRead(true);
-                    notificationRepository.save(n);
-                });
-    }
-
-    // ─── helpers ──────────────────────────────────────────────────────────────
-
-    private User getUser(String email) {
-        return userRepository.findByEmail(email)
-                .orElseThrow(() -> new RuntimeException("User not found"));
+        notificationRepository.markAllRead(userService.getByEmail(email));
     }
 
     private NotificationResponse toResponse(Notification n) {
