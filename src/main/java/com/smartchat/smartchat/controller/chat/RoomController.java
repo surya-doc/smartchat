@@ -5,7 +5,9 @@ import com.smartchat.smartchat.dto.chat.InviteLinkResponse;
 import com.smartchat.smartchat.dto.chat.JoinRequestResponse;
 import com.smartchat.smartchat.dto.chat.JoinRoomResponse;
 import com.smartchat.smartchat.dto.chat.MessageResponse;
+import com.smartchat.smartchat.dto.chat.PostMessageRequest;
 import com.smartchat.smartchat.dto.chat.RoomResponse;
+import com.smartchat.smartchat.dto.chat.SendMessageRequest;
 import com.smartchat.smartchat.service.chat.MessageService;
 import com.smartchat.smartchat.service.chat.RoomService;
 import com.smartchat.smartchat.service.chat.UnreadService;
@@ -80,6 +82,19 @@ public class RoomController {
     @GetMapping("/{roomId}/messages")
     public List<MessageResponse> getMessages(@PathVariable Long roomId, @AuthenticationPrincipal UserDetails user) {
         return messageService.getRecentMessages(roomId, user.getUsername());
+    }
+
+    /**
+     * REST alternative to STOMP /app/chat.send (scripts, simple clients, testing).
+     * Same service call, so the message is broadcast, rate-limited and sent through the outbox exactly the same way.
+     */
+    @PostMapping("/{roomId}/messages")
+    public ResponseEntity<MessageResponse> postMessage(@PathVariable Long roomId,
+                                                       @Valid @RequestBody PostMessageRequest request,
+                                                       @AuthenticationPrincipal UserDetails user) {
+        MessageResponse message = messageService.sendMessage(
+                new SendMessageRequest(roomId, request.content(), request.replyToId()), user.getUsername());
+        return ResponseEntity.status(HttpStatus.CREATED).body(message);
     }
 
     @GetMapping("/{roomId}/messages/search")

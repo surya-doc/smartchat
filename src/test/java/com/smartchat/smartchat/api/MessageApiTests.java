@@ -47,6 +47,27 @@ class MessageApiTests extends IntegrationTestBase {
     }
 
     @Test
+    void membersCanPostOverRestToo() throws Exception {
+        TestUser owner = registerUser();
+        TestUser outsider = registerUser();
+        long roomId = createRoom(owner, "REST posting", false);
+
+        mockMvc.perform(post("/api/rooms/{id}/messages", roomId)
+                        .header(HttpHeaders.AUTHORIZATION, owner.bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\": \"posted over REST\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.content").value("posted over REST"))
+                .andExpect(jsonPath("$.roomId").value((int) roomId));
+
+        mockMvc.perform(post("/api/rooms/{id}/messages", roomId)
+                        .header(HttpHeaders.AUTHORIZATION, outsider.bearer())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"content\": \"let me in\"}"))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
     void nonMembersCannotSend() throws Exception {
         TestUser owner = registerUser();
         TestUser outsider = registerUser();

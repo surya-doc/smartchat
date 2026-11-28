@@ -81,6 +81,7 @@ Ready-to-run requests: [`docs/api-examples.http`](docs/api-examples.http) (VS Co
 | POST | `/api/rooms` | Create a room (`isPrivate` for private) |
 | POST | `/api/rooms/{id}/join` | Join a public room / request to join a private one |
 | GET | `/api/rooms/{id}/messages` | Latest 50 messages (members only) |
+| POST | `/api/rooms/{id}/messages` | Post a message (REST alternative to STOMP `/app/chat.send`) |
 | GET | `/api/rooms/{id}/messages/search?q=` | Search messages |
 | POST | `/api/rooms/{id}/invites` | Create an invite link (admins, private rooms) |
 | POST | `/api/rooms/invites/{token}/accept` | Accept an invite |

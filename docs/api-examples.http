@@ -98,6 +98,15 @@ Content-Type: application/json
   "content": "Hi Bob!"
 }
 
+### 13a. Alice posts in #general (room 1). This goes through the outbox to Kafka, and the consumer bumps Bob's unread count
+POST {{baseUrl}}/api/rooms/1/messages
+Authorization: Bearer {{aliceToken}}
+Content-Type: application/json
+
+{
+  "content": "Hello everyone!"
+}
+
 ### 13b. Unread counts per room for Bob ({ roomId: count }); updated by the Kafka consumer
 GET {{baseUrl}}/api/rooms/unread
 Authorization: Bearer {{bobToken}}
