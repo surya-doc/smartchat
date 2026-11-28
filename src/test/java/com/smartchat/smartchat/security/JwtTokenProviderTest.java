@@ -15,7 +15,7 @@ class JwtTokenProviderTest {
 
     private static JwtTokenProvider provider(String secret, long expirationMs) {
         return new JwtTokenProvider(new AppProperties(
-                new AppProperties.Jwt(secret, expirationMs), "http://localhost", List.of(), 1L));
+                new AppProperties.Jwt(secret, expirationMs), "http://localhost", List.of(), 1L, null, null));
     }
 
     @Test

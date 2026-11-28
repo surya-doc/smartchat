@@ -14,9 +14,17 @@ public record AppProperties(
         Jwt jwt,
         String frontendUrl,
         List<String> corsAllowedOrigins,
-        Long defaultRoomId
+        Long defaultRoomId,
+        Presence presence,
+        RateLimit rateLimit
 ) {
 
     public record Jwt(String secret, long expirationMs) {
+    }
+
+    public record Presence(long heartbeatIntervalMs, long sweepIntervalMs, long timeoutMs) {
+    }
+
+    public record RateLimit(int maxMessages, long windowMs) {
     }
 }

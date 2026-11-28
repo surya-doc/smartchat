@@ -11,7 +11,9 @@ A real-time chat platform: public and private rooms, direct messages, replies, r
 - **Auth:** register/login with JWT; every new user joins `#general`
 - **Rooms:** public rooms (join instantly) and private rooms (invite links or admin-approved join requests)
 - **Messaging:** real-time room messages and DMs over STOMP; replies, edit, delete (admins can moderate), emoji reactions, search
-- **Presence:** online/offline from server-side WebSocket session events, correct across multiple tabs
+- **Presence:** online/offline from server-side WebSocket session events, shared across instances in Redis, correct across tabs, and self-healing if an instance crashes
+- **Horizontal scaling:** WebSocket events fan out through Redis Pub/Sub, so users on different instances still see each other's messages
+- **Rate limiting:** per-user message limit shared by all instances (HTTP 429 + `Retry-After`)
 - **Notifications:** stored, and pushed live to the user's open sessions
 - **Security:** JWT on REST and on STOMP CONNECT; room membership enforced on every read, write and subscription
 - **Errors:** consistent RFC 9457 ProblemDetail JSON for every failure
@@ -22,7 +24,8 @@ A real-time chat platform: public and private rooms, direct messages, replies, r
 |---|---|
 | Backend | Java 17, Spring Boot 4, Spring Security, Spring WebSocket (STOMP), Spring Data JPA |
 | Data | MySQL 8.4 with Flyway migrations (`ddl-auto: validate`) |
-| Messaging | Kafka, Redis *(in progress)* |
+| Real-time & state | Redis (Pub/Sub fan-out, presence, rate limiting, cache) |
+| Events | Kafka *(in progress)* |
 | Tests | JUnit 5, Mockito, Testcontainers, MockMvc |
 | CI | GitHub Actions |
 
@@ -56,6 +59,7 @@ Run the tests (Docker must be running):
 | `JWT_EXPIRATION_MS` | Token lifetime (default 24h) |
 | `FRONTEND_URL` | Used to build invite links |
 | `CORS_ALLOWED_ORIGINS` | Comma-separated list of allowed frontend origins |
+| `REDIS_URL` | Redis connection, e.g. `redis://localhost:6379` or `rediss://user:pass@host:port` |
 
 ## API overview
 
@@ -63,6 +67,8 @@ Run the tests (Docker must be running):
 |---|---|---|
 | POST | `/api/auth/register` | Create an account, returns a JWT |
 | POST | `/api/auth/login` | Log in, returns a JWT |
+| GET | `/api/users/me` | Current user's profile |
+| GET | `/api/users/online` | Usernames online right now |
 | GET | `/api/rooms` | Public rooms |
 | GET | `/api/rooms/mine` | Rooms I'm a member of |
 | POST | `/api/rooms` | Create a room (`isPrivate` for private) |
@@ -97,8 +103,8 @@ Connect to `/ws` (SockJS) with header `Authorization: Bearer <jwt>` on CONNECT.
 ## Roadmap
 
 - [x] Flyway-managed schema, ProblemDetail errors, room-level authorization on REST and STOMP, integration tests, CI
-- [ ] Redis: shared presence, unread counters, rate limiting, caching, cross-instance WebSocket fan-out
-- [ ] Kafka: chat events with idempotent consumers, retries and a dead-letter topic
+- [x] Redis: shared presence, rate limiting, caching, cross-instance WebSocket fan-out
+- [ ] Kafka: transactional outbox, unread counters, idempotent consumers, retries and a dead-letter topic
 - [ ] Angular + PrimeNG frontend
 - [ ] Google sign-in (OAuth2) and Stripe Checkout for Premium
 - [ ] Deployment with a live demo, architecture diagram and API docs (OpenAPI)

@@ -14,6 +14,7 @@ import com.smartchat.smartchat.repository.MessageReactionRepository;
 import com.smartchat.smartchat.repository.MessageReactionRepository.ReactionCount;
 import com.smartchat.smartchat.repository.MessageRepository;
 import com.smartchat.smartchat.repository.RoomRepository;
+import com.smartchat.smartchat.service.RateLimiter;
 import com.smartchat.smartchat.service.UserService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.ApplicationEventPublisher;
@@ -43,6 +44,7 @@ public class MessageService {
     private final RoomRepository roomRepository;
     private final UserService userService;
     private final RoomAccessService roomAccessService;
+    private final RateLimiter rateLimiter;
     private final ApplicationEventPublisher eventPublisher;
 
     public MessageResponse sendMessage(SendMessageRequest request, String email) {
@@ -50,6 +52,7 @@ public class MessageService {
             throw new BadRequestException("Room ID is required.");
         }
         roomAccessService.requireActiveMember(request.roomId(), email);
+        rateLimiter.checkMessageRate(email);
         String content = ContentRules.requireContent(request.content());
 
         User sender = userService.getByEmail(email);

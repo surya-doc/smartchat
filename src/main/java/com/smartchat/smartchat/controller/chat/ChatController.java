@@ -9,6 +9,7 @@ import com.smartchat.smartchat.exception.BadRequestException;
 import com.smartchat.smartchat.exception.ConflictException;
 import com.smartchat.smartchat.exception.ForbiddenException;
 import com.smartchat.smartchat.exception.ResourceNotFoundException;
+import com.smartchat.smartchat.exception.TooManyRequestsException;
 import com.smartchat.smartchat.service.UserService;
 import com.smartchat.smartchat.service.chat.DirectMessageService;
 import com.smartchat.smartchat.service.chat.MessageService;
@@ -57,13 +58,13 @@ public class ChatController {
             throw new BadRequestException("Room ID is required.");
         }
         roomAccessService.requireActiveMember(request.roomId(), principal.getName());
-        String username = userService.getByEmail(principal.getName()).getUsername();
+        String username = userService.getUsername(principal.getName()); // cached in Redis
         publisher.toRoomTyping(request.roomId(), new TypingEvent(request.roomId(), username, request.typing()));
     }
 
     /** Expected business errors go back only to the session that sent the frame. */
     @MessageExceptionHandler({ResourceNotFoundException.class, ForbiddenException.class,
-            BadRequestException.class, ConflictException.class})
+            BadRequestException.class, ConflictException.class, TooManyRequestsException.class})
     @SendToUser(destinations = WebSocketPublisher.QUEUE_ERRORS, broadcast = false)
     public ErrorMessage handleBusinessError(RuntimeException ex) {
         return new ErrorMessage(ex.getMessage());

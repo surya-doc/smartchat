@@ -7,3 +7,6 @@ app:
     expiration-ms: 3600000
   frontend-url: http://localhost:4200
   cors-allowed-origins: http://localhost:4200
+  rate-limit:
+    max-messages: 5      # low limit so the rate-limit tests are quick
+    window-ms: 10000

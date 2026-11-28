@@ -1,13 +1,16 @@
 package com.smartchat.smartchat.service;
 
+import com.smartchat.smartchat.dto.UserResponse;
 import com.smartchat.smartchat.entity.User;
 import com.smartchat.smartchat.exception.ResourceNotFoundException;
 import com.smartchat.smartchat.repository.UserRepository;
 import lombok.RequiredArgsConstructor;
+import org.springframework.cache.annotation.Cacheable;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
-import java.util.Optional;
+import java.util.Collection;
+import java.util.List;
 
 @Service
 @RequiredArgsConstructor
@@ -26,12 +29,23 @@ public class UserService {
                 .orElseThrow(() -> new ResourceNotFoundException("User not found"));
     }
 
-    /** Updates the stored online flag and returns the username, if the user exists. */
-    @Transactional
-    public Optional<String> setOnlineStatus(String email, boolean online) {
-        return userRepository.findByEmail(email).map(user -> {
-            user.setIsOnline(online);   // saved by dirty checking when the transaction commits
-            return user.getUsername();
-        });
+    /**
+     * Cached in Redis: typing indicators and presence events need the username for an email
+     * many times per second, and usernames never change, so there is nothing to invalidate.
+     * (If renaming is ever added, that method must evict this entry.)
+     */
+    @Cacheable(cacheNames = "usernames", key = "#email")
+    public String getUsername(String email) {
+        return getByEmail(email).getUsername();
+    }
+
+    public List<String> getUsernames(Collection<String> emails) {
+        return userRepository.findByEmailIn(emails).stream().map(User::getUsername).toList();
+    }
+
+    public UserResponse getProfile(String email) {
+        User user = getByEmail(email);
+        return new UserResponse(user.getId(), user.getUsername(), user.getEmail(),
+                user.getTier().name(), user.getAvatarUrl());
     }
 }

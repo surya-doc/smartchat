@@ -7,6 +7,9 @@ spring:
     url: jdbc:mysql://localhost:3307/smartchat
     username: smartchat
     password: smartchat
+  data:
+    redis:
+      url: redis://localhost:6379
 
 app:
   jwt:

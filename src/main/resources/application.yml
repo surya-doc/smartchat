@@ -29,6 +29,16 @@ spring:
     enabled: true
     locations: classpath:db/migration
 
+  data:
+    redis:
+      url: ${REDIS_URL}                # e.g. redis://localhost:6379 or rediss://user:pass@host:port
+
+  cache:
+    type: redis
+    redis:
+      time-to-live: 1h
+      key-prefix: "smartchat:cache:"
+
 server:
   error:
     include-message: never
@@ -41,6 +51,13 @@ app:
   frontend-url: ${FRONTEND_URL}                  # used to build invite links
   cors-allowed-origins: ${CORS_ALLOWED_ORIGINS}  # comma-separated list
   default-room-id: 1                             # every new user joins #general (seeded in V1)
+  presence:
+    heartbeat-interval-ms: 20000   # each instance refreshes "last seen" for its connected users
+    sweep-interval-ms: 30000       # how often stale users are marked offline
+    timeout-ms: 60000              # no heartbeat for this long = offline (e.g. the instance crashed)
+  rate-limit:
+    max-messages: 20               # per user, room messages + DMs combined
+    window-ms: 10000
 
 logging:
   level:

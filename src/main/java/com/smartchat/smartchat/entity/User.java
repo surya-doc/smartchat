@@ -34,10 +34,6 @@ public class User {
     @Column(length = 500)
     private String avatarUrl;
 
-    @Column(nullable = false)
-    @Builder.Default
-    private Boolean isOnline = false;
-
     @CreationTimestamp
     private LocalDateTime createdAt;
 
