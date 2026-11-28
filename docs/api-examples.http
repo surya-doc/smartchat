@@ -1,0 +1,110 @@
+### SmartChat API examples
+### Open in VS Code with the "REST Client" extension (Huachao Mao) and click
+### "Send Request" above each request. Start the app first: docker compose up -d, then ./mvnw spring-boot:run
+
+@baseUrl = http://localhost:8080
+
+### 1. Register Alice (only needed once; 409 Conflict afterwards is fine)
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "alice",
+  "email": "alice@example.com",
+  "password": "secret123"
+}
+
+### 2. Register Bob (only needed once)
+POST {{baseUrl}}/api/auth/register
+Content-Type: application/json
+
+{
+  "username": "bob",
+  "email": "bob@example.com",
+  "password": "secret123"
+}
+
+### 3. Log in as Alice (run this before the requests that use her token)
+# @name loginAlice
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "alice@example.com",
+  "password": "secret123"
+}
+
+### 4. Log in as Bob
+# @name loginBob
+POST {{baseUrl}}/api/auth/login
+Content-Type: application/json
+
+{
+  "email": "bob@example.com",
+  "password": "secret123"
+}
+
+@aliceToken = {{loginAlice.response.body.$.token}}
+@bobToken = {{loginBob.response.body.$.token}}
+
+### 5. Who am I? (Alice)
+GET {{baseUrl}}/api/users/me
+Authorization: Bearer {{aliceToken}}
+
+### 6. Who am I? (Bob) - his id is used by the DM request below
+# @name meBob
+GET {{baseUrl}}/api/users/me
+Authorization: Bearer {{bobToken}}
+
+### 7. Who is online? (users with an open WebSocket connection; [] until a client connects)
+GET {{baseUrl}}/api/users/online
+Authorization: Bearer {{aliceToken}}
+
+### 8. Alice's rooms (new users are added to #general)
+GET {{baseUrl}}/api/rooms/mine
+Authorization: Bearer {{aliceToken}}
+
+### 9. Alice creates a private room
+# @name privateRoom
+POST {{baseUrl}}/api/rooms
+Authorization: Bearer {{aliceToken}}
+Content-Type: application/json
+
+{
+  "name": "Project X",
+  "description": "Only invited people",
+  "isPrivate": true
+}
+
+### 10. Bob can't see it (404), because private rooms are hidden from non-members
+GET {{baseUrl}}/api/rooms/{{privateRoom.response.body.$.id}}
+Authorization: Bearer {{bobToken}}
+
+### 11. Bob asks to join, which notifies Alice
+POST {{baseUrl}}/api/rooms/{{privateRoom.response.body.$.id}}/join
+Authorization: Bearer {{bobToken}}
+
+### 12. Alice sees the pending request
+GET {{baseUrl}}/api/rooms/{{privateRoom.response.body.$.id}}/join-requests
+Authorization: Bearer {{aliceToken}}
+
+### 13. Alice sends Bob a DM. Send this 21+ times within 10 seconds to hit the rate limit (429)
+POST {{baseUrl}}/api/dm
+Authorization: Bearer {{aliceToken}}
+Content-Type: application/json
+
+{
+  "receiverId": {{meBob.response.body.$.id}},
+  "content": "Hi Bob!"
+}
+
+### 14. Bob's unread notifications
+GET {{baseUrl}}/api/notifications/unread
+Authorization: Bearer {{bobToken}}
+
+### 15. Error format check: unknown room -> 404 ProblemDetail
+GET {{baseUrl}}/api/rooms/999999
+Authorization: Bearer {{aliceToken}}
+
+### 16. No token -> 401
+GET {{baseUrl}}/api/rooms/mine

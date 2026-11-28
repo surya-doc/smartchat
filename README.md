@@ -63,6 +63,8 @@ Run the tests (Docker must be running):
 
 ## API overview
 
+Ready-to-run requests: [`docs/api-examples.http`](docs/api-examples.http) (VS Code REST Client or IntelliJ HTTP Client).
+
 | Method | Path | Description |
 |---|---|---|
 | POST | `/api/auth/register` | Create an account, returns a JWT |
