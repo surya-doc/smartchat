@@ -33,6 +33,18 @@ spring:
     redis:
       url: ${REDIS_URL:}               # e.g. rediss://user:pass@host:port; empty = use the profile's / test container's settings
 
+  kafka:
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      acks: all                          # wait for all in-sync replicas
+      properties:
+        enable.idempotence: true         # broker drops duplicates caused by producer retries
+        max.block.ms: 5000               # fail fast if Kafka is down (the outbox retries later)
+        request.timeout.ms: 5000
+        delivery.timeout.ms: 10000
+    consumer:
+      auto-offset-reset: earliest        # a new consumer group starts from the beginning
+
   cache:
     type: redis
     redis:
@@ -58,6 +70,10 @@ app:
   rate-limit:
     max-messages: 20               # per user, room messages + DMs combined
     window-ms: 10000
+  outbox:
+    poll-interval-ms: 500          # how often unpublished events are sent to Kafka
+    batch-size: 100
+    retention-days: 7              # published events older than this are deleted
 
 logging:
   level:

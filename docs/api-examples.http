@@ -98,6 +98,14 @@ Content-Type: application/json
   "content": "Hi Bob!"
 }
 
+### 13b. Unread counts per room for Bob ({ roomId: count }); updated by the Kafka consumer
+GET {{baseUrl}}/api/rooms/unread
+Authorization: Bearer {{bobToken}}
+
+### 13c. Bob opens #general (room 1), resetting its unread count
+POST {{baseUrl}}/api/rooms/1/read
+Authorization: Bearer {{bobToken}}
+
 ### 14. Bob's unread notifications
 GET {{baseUrl}}/api/notifications/unread
 Authorization: Bearer {{bobToken}}

@@ -8,6 +8,7 @@ import com.smartchat.smartchat.dto.chat.MessageResponse;
 import com.smartchat.smartchat.dto.chat.RoomResponse;
 import com.smartchat.smartchat.service.chat.MessageService;
 import com.smartchat.smartchat.service.chat.RoomService;
+import com.smartchat.smartchat.service.chat.UnreadService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
@@ -25,6 +26,7 @@ import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
 import java.util.List;
+import java.util.Map;
 
 /** {@code @AuthenticationPrincipal} gives the logged-in user; its "username" is the email. */
 @RestController
@@ -34,6 +36,7 @@ public class RoomController {
 
     private final RoomService roomService;
     private final MessageService messageService;
+    private final UnreadService unreadService;
 
     @PostMapping
     public ResponseEntity<RoomResponse> createRoom(@Valid @RequestBody CreateRoomRequest request,
@@ -50,6 +53,18 @@ public class RoomController {
     @GetMapping("/mine")
     public List<RoomResponse> getMyRooms(@AuthenticationPrincipal UserDetails user) {
         return roomService.getMyRooms(user.getUsername());
+    }
+
+    /** roomId -> unread count for the current user (rooms with nothing unread are omitted). */
+    @GetMapping("/unread")
+    public Map<Long, Long> getUnreadCounts(@AuthenticationPrincipal UserDetails user) {
+        return unreadService.getUnreadCounts(user.getUsername());
+    }
+
+    @PostMapping("/{roomId}/read")
+    @ResponseStatus(HttpStatus.NO_CONTENT)
+    public void markRoomRead(@PathVariable Long roomId, @AuthenticationPrincipal UserDetails user) {
+        unreadService.markRoomRead(roomId, user.getUsername());
     }
 
     @GetMapping("/{roomId}")

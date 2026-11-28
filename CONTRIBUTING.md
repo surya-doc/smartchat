@@ -2,8 +2,8 @@
 
 ## Stack
 
-- **Backend:** Java 17, Spring Boot 4, Spring Security (JWT), STOMP over WebSocket, Spring Data JPA, MySQL 8.4, Flyway, Redis
-- **Tests:** JUnit 5, Mockito, Testcontainers (real MySQL and Redis), MockMvc, Spring's STOMP client
+- **Backend:** Java 17, Spring Boot 4, Spring Security (JWT), STOMP over WebSocket, Spring Data JPA, MySQL 8.4, Flyway, Redis, Kafka
+- **Tests:** JUnit 5, Mockito, Testcontainers (real MySQL, Redis and Kafka), MockMvc, Spring's STOMP client, Awaitility
 - **CI:** GitHub Actions (`.github/workflows/ci.yml`) runs `./mvnw verify` on every push
 
 ## Conventions
@@ -13,7 +13,9 @@
 - **Identity:** the Spring Security principal name is the user's **email**, both for REST (`@AuthenticationPrincipal UserDetails#getUsername`) and STOMP (`Principal#getName`). User WebSocket destinations are addressed by email.
 - **Authorization:** room access goes through `RoomAccessService` (REST, STOMP handlers, and SUBSCRIBE in `StompAuthChannelInterceptor`).
 - **Real-time:** services publish `RoomMessageEvent` / `UserQueueEvent`; `RealtimeEventRelay` pushes them **after the transaction commits** through `WebSocketPublisher`, which goes via Redis Pub/Sub so every instance delivers to its own sessions. Only `RealtimeRedisSubscriber` talks to `SimpMessagingTemplate`.
-- **Shared state lives in Redis**, never in instance memory (presence, rate limits). Key prefix: `smartchat:`.
+- **Shared state lives in Redis**, never in instance memory (presence, rate limits, unread counts). Key prefix: `smartchat:`.
+- **Domain events go through the outbox:** call `OutboxService` inside the same transaction as the change; never send to Kafka directly from a service. Kafka keys are the aggregate id (room id) so related events stay ordered.
+- **Consumers must be idempotent:** deduplicate on `eventId` atomically with the side effect (see `UnreadService`). Unparseable payloads go straight to the DLT; other failures retry with backoff first.
 - **Schema:** Flyway owns it (`src/main/resources/db/migration`). Hibernate runs with `ddl-auto: validate`. Never edit a migration that has been merged; add a new `V<n>__...sql`.
 - **Queries:** avoid N+1 (use `@EntityGraph` or batch queries); use bulk `@Modifying` updates for mass changes.
 - **Config:** everything environment-specific comes from env vars (`application.yml`); local values live in `application-dev.yml`. Personal overrides go in `application-local.yml` (gitignored).

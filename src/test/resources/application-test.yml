@@ -10,3 +10,5 @@ app:
   rate-limit:
     max-messages: 5      # low limit so the rate-limit tests are quick
     window-ms: 10000
+  outbox:
+    poll-interval-ms: 200  # publish quickly so tests don't wait long

@@ -16,7 +16,8 @@ public record AppProperties(
         List<String> corsAllowedOrigins,
         Long defaultRoomId,
         Presence presence,
-        RateLimit rateLimit
+        RateLimit rateLimit,
+        Outbox outbox
 ) {
 
     public record Jwt(String secret, long expirationMs) {
@@ -26,5 +27,8 @@ public record AppProperties(
     }
 
     public record RateLimit(int maxMessages, long windowMs) {
+    }
+
+    public record Outbox(long pollIntervalMs, int batchSize, int retentionDays) {
     }
 }

@@ -10,6 +10,7 @@ import com.smartchat.smartchat.event.RoomMessageEvent;
 import com.smartchat.smartchat.exception.BadRequestException;
 import com.smartchat.smartchat.exception.ForbiddenException;
 import com.smartchat.smartchat.exception.ResourceNotFoundException;
+import com.smartchat.smartchat.messaging.OutboxService;
 import com.smartchat.smartchat.repository.MessageReactionRepository;
 import com.smartchat.smartchat.repository.MessageReactionRepository.ReactionCount;
 import com.smartchat.smartchat.repository.MessageRepository;
@@ -45,6 +46,7 @@ public class MessageService {
     private final UserService userService;
     private final RoomAccessService roomAccessService;
     private final RateLimiter rateLimiter;
+    private final OutboxService outboxService;
     private final ApplicationEventPublisher eventPublisher;
 
     public MessageResponse sendMessage(SendMessageRequest request, String email) {
@@ -74,6 +76,8 @@ public class MessageService {
         }
 
         Message saved = messageRepository.save(builder.build());
+        outboxService.messageCreated(saved); // same transaction: saved together or not at all
+
         MessageResponse response = toResponse(saved, Map.of()); // a new message has no reactions yet
         eventPublisher.publishEvent(new RoomMessageEvent(request.roomId(), response));
         return response;

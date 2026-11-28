@@ -5,6 +5,8 @@ import com.smartchat.smartchat.entity.RoomMember;
 import com.smartchat.smartchat.entity.User;
 import org.springframework.data.jpa.repository.EntityGraph;
 import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.util.List;
 import java.util.Optional;
@@ -18,6 +20,10 @@ public interface RoomMemberRepository extends JpaRepository<RoomMember, Long> {
                                                           RoomMember.MemberStatus status);
 
     Optional<RoomMember> findByRoomAndUser(Room room, User user);
+
+    @Query("SELECT rm.user.id FROM RoomMember rm WHERE rm.room.id = :roomId AND rm.status = :status")
+    List<Long> findUserIdsByRoomIdAndStatus(@Param("roomId") Long roomId,
+                                            @Param("status") RoomMember.MemberStatus status);
 
     @EntityGraph(attributePaths = {"room", "room.createdBy"})
     List<RoomMember> findByUser_EmailAndStatusOrderByJoinedAtAsc(String email, RoomMember.MemberStatus status);
