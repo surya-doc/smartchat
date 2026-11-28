@@ -12,6 +12,7 @@ import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
+import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.messaging.converter.CompositeMessageConverter;
 import org.springframework.messaging.converter.JacksonJsonMessageConverter;
 import org.springframework.messaging.converter.StringMessageConverter;
@@ -63,6 +64,9 @@ class StompIntegrationTests {
 
     @Autowired
     private UserRepository userRepository;
+
+    @Autowired
+    private StringRedisTemplate redis;
 
     private final List<StompSession> openSessions = new ArrayList<>();
 
@@ -131,6 +135,45 @@ class StompIntegrationTests {
         assertThat(errors.firstError.get(TIMEOUT_SECONDS, TimeUnit.SECONDS))
                 .as("the server should answer the SUBSCRIBE with an ERROR frame")
                 .isNotNull();
+    }
+
+    @Test
+    void presenceIsBroadcastWhenSomeoneConnects() throws Exception {
+        User watcher = register();
+        User newcomer = register();
+
+        StompSession watcherSession = connect(watcher.token(), new ErrorCollector());
+        BlockingQueue<Map<String, Object>> presence = subscribe(watcherSession, "/topic/presence");
+
+        connect(newcomer.token(), new ErrorCollector());
+
+        // Other tests may also produce presence events, so look for the newcomer's.
+        Map<String, Object> event;
+        do {
+            event = presence.poll(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        } while (event != null && !newcomer.username().equals(event.get("username")));
+
+        assertThat(event).as("an online event for the newcomer").isNotNull();
+        assertThat(event.get("online")).isEqualTo(true);
+    }
+
+    @Test
+    void eventsPublishedByAnotherInstanceReachLocalClients() throws Exception {
+        User owner = register();
+        long roomId = roomService.createRoom(new CreateRoomRequest("Cluster room", null, false), owner.email()).getId();
+
+        StompSession session = connect(owner.token(), new ErrorCollector());
+        BlockingQueue<Map<String, Object>> received = subscribe(session, "/topic/room." + roomId);
+
+        // Exactly what WebSocketPublisher on a different instance would put on the channel.
+        String envelope = """
+                {"destination": "/topic/room.%d", "userEmail": null, "payload": {"content": "sent via instance B"}}
+                """.formatted(roomId);
+        redis.convertAndSend(WebSocketPublisher.REDIS_CHANNEL, envelope);
+
+        Map<String, Object> message = received.poll(TIMEOUT_SECONDS, TimeUnit.SECONDS);
+        assertThat(message).isNotNull();
+        assertThat(message.get("content")).isEqualTo("sent via instance B");
     }
 
     @Test

@@ -3,6 +3,7 @@ package com.smartchat.smartchat.websocket;
 import com.smartchat.smartchat.service.PresenceService;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.event.EventListener;
+import org.springframework.messaging.simp.SimpMessageHeaderAccessor;
 import org.springframework.stereotype.Component;
 import org.springframework.web.socket.messaging.SessionConnectedEvent;
 import org.springframework.web.socket.messaging.SessionDisconnectEvent;
@@ -23,16 +24,14 @@ public class PresenceEventListener {
     @EventListener
     public void onConnected(SessionConnectedEvent event) {
         Principal user = event.getUser();
-        if (user != null) {
-            presenceService.sessionOpened(user.getName());
+        String sessionId = SimpMessageHeaderAccessor.getSessionId(event.getMessage().getHeaders());
+        if (user != null && sessionId != null) {
+            presenceService.sessionOpened(sessionId, user.getName());
         }
     }
 
     @EventListener
     public void onDisconnected(SessionDisconnectEvent event) {
-        Principal user = event.getUser();
-        if (user != null) {
-            presenceService.sessionClosed(user.getName());
-        }
+        presenceService.sessionClosed(event.getSessionId());
     }
 }

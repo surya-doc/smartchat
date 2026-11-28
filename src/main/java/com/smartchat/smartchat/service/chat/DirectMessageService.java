@@ -8,6 +8,7 @@ import com.smartchat.smartchat.entity.User;
 import com.smartchat.smartchat.event.UserQueueEvent;
 import com.smartchat.smartchat.exception.BadRequestException;
 import com.smartchat.smartchat.repository.DirectMessageRepository;
+import com.smartchat.smartchat.service.RateLimiter;
 import com.smartchat.smartchat.service.UserService;
 import com.smartchat.smartchat.websocket.WebSocketPublisher;
 import lombok.RequiredArgsConstructor;
@@ -25,6 +26,7 @@ public class DirectMessageService {
     private final DirectMessageRepository directMessageRepository;
     private final UserService userService;
     private final NotificationService notificationService;
+    private final RateLimiter rateLimiter;
     private final ApplicationEventPublisher eventPublisher;
 
     /**
@@ -35,6 +37,7 @@ public class DirectMessageService {
         if (request.receiverId() == null) {
             throw new BadRequestException("Receiver ID is required.");
         }
+        rateLimiter.checkMessageRate(senderEmail);
         User sender = userService.getByEmail(senderEmail);
         User receiver = userService.getById(request.receiverId());
 

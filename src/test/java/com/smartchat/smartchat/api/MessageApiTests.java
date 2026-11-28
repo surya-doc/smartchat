@@ -5,6 +5,7 @@ import com.smartchat.smartchat.dto.chat.MessageResponse;
 import com.smartchat.smartchat.dto.chat.SendMessageRequest;
 import com.smartchat.smartchat.exception.BadRequestException;
 import com.smartchat.smartchat.exception.ForbiddenException;
+import com.smartchat.smartchat.exception.TooManyRequestsException;
 import com.smartchat.smartchat.service.chat.MessageService;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -128,6 +129,24 @@ class MessageApiTests extends IntegrationTestBase {
                         .content("{\"emoji\": \"👍\"}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.reactions['👍']").doesNotExist());
+    }
+
+    @Test
+    void sendingTooFastIsRateLimited() throws Exception {
+        TestUser owner = registerUser();
+        long roomId = createRoom(owner, "Spam test", false);
+
+        // The test profile allows 5 messages per 10s window. 11 attempts must hit the limit even
+        // if they happen to straddle a window boundary (one of the two windows gets > 5).
+        int rejected = 0;
+        for (int i = 0; i < 11; i++) {
+            try {
+                messageService.sendMessage(new SendMessageRequest(roomId, "msg " + i, null), owner.email());
+            } catch (TooManyRequestsException e) {
+                rejected++;
+            }
+        }
+        assertThat(rejected).isPositive();
     }
 
     @Test
